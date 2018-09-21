@@ -1,0 +1,32 @@
+---
+apiVersion: extensions/v1beta1 # for versions before 1.6.0 use extensions/v1beta1
+kind: Deployment
+metadata:
+  name: odm
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: odm
+    spec:
+      containers:
+      - name: odm
+        image: ibmcom/odm:8.9.2.1
+        env:
+          - name: LICENSE
+            value: "accept"
+        ports:
+        - containerPort: 9060
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: odm
+spec:
+  selector:
+    run: odm
+  type: NodePort
+  ports:
+   - protocol: TCP
+port: 9060

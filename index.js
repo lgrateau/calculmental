@@ -53,9 +53,9 @@ const AMAZON_CancelIntent_Handler = {
         const request = handlerInput.requestEnvelope.request;
         const responseBuilder = handlerInput.responseBuilder;
         let sessionAttributes = handlerInput.attributesManager.getSessionAttributes();
+        let languageModel = getLanguageModel(states.CLOSESESSION);
 
-
-        let say = 'A trés bientôt';
+        let say = randomElement(languageModel.messages.end)
 
         return responseBuilder
             .speak(say)
@@ -81,13 +81,13 @@ const AMAZON_HelpIntent_Handler = {
         let say = helpMsg;
 
         let previousIntent = getPreviousIntent(sessionAttributes);
-   
+
         if (previousIntent && !handlerInput.requestEnvelope.session.new) {
             //say += helpLast + previousIntent + '. ';
         }
         // say +=  'I understand  ' + intents.length + ' intents, '
 
-        say += ' '+helpSample+' , ' + getSampleUtterance(sampleIntent);
+        say += ' ' + helpSample + ' , ' + getSampleUtterance(sampleIntent);
 
         return responseBuilder
             .speak(say)
@@ -135,6 +135,7 @@ const AMAZON_NavigateHomeIntent_Handler = {
             .getResponse();
     },
 };
+
 
 const AMAZON_PauseIntent_Handler = {
     canHandle(handlerInput) {
@@ -186,9 +187,9 @@ const Resultat_Handler = {
         const responseBuilder = handlerInput.responseBuilder;
         let sessionAttributes = handlerInput.attributesManager.getSessionAttributes();
         sessionAttributes.result;
-      
-  
-        let say='';
+
+
+        let say = '';
         let slotStatus = '';
         let resolvedSlot;
 
@@ -198,14 +199,14 @@ const Resultat_Handler = {
         // console.log('***** slotValues: ' +  JSON.stringify(slotValues, null, 2));
         //   SLOT: nombre
         if (slotValues.nombre.heardAs && slotValues.nombre.heardAs !== '') {
-            if(sessionAttributes.result == slotValues.nombre.heardAs) {
-                 say = 'bravo tu as trouvé le bon résultat.';
+            if (sessionAttributes.result == slotValues.nombre.heardAs) {
+                say = 'bravo tu as trouvé le bon résultat.';
             } else {
-                 say = 'malheureusement je crois que tu as fais une petite erreur. Le résultat est de '+sessionAttributes.result+' au lieu de '+slotValues.nombre.heardAs;
+                say = 'malheureusement je crois que tu as fais une petite erreur. Le résultat est de ' + sessionAttributes.result + ' au lieu de ' + slotValues.nombre.heardAs;
             }
         } else {
-           
-            say = 'je n\'ai pas compris le resultat de ton '+randomElement(['calcul'],['addition']);
+
+            say = 'je n\'ai pas compris le resultat de ton ' + randomElement(['calcul'], ['addition']);
         }
         if (slotValues.nombre.ERstatus === 'ER_SUCCESS_MATCH') {
             slotStatus += 'a valid ';
@@ -235,22 +236,63 @@ const Resultat_Handler = {
     },
 };
 
-const Addition_Handler = {
+const Operations_Handler = {
     canHandle(handlerInput) {
         const request = handlerInput.requestEnvelope.request;
-        return request.type === 'IntentRequest' && request.intent.name === 'Addition';
+        return request.type === 'IntentRequest' && request.intent.name === 'Operations';
     },
     handle(handlerInput) {
+
+        console.log("in Operations_Handler");
         const request = handlerInput.requestEnvelope.request;
         const responseBuilder = handlerInput.responseBuilder;
-        let say = askComputation(handlerInput);
-
+        let say = askLevel(handlerInput);
+        console.log("say : "+say);
         return responseBuilder
             .speak(say)
             .reprompt('try again, ' + say)
             .getResponse();
     },
 };
+
+const Level_Handler = {
+    canHandle(handlerInput) {
+        const request = handlerInput.requestEnvelope.request;
+        return request.type === 'IntentRequest' && request.intent.name === 'Level';
+    },
+    handle(handlerInput) {
+        console.log("in Niveau_Handler");
+        let attributes = handlerInput.attributesManager.getSessionAttributes();
+        let slotValues = getSlotValues(request.intent.slots);
+        console.log("Niveau : "+slotValues.nombre)
+        const responseBuilder = handlerInput.responseBuilder;
+        let say = checkState(states.LEVEL, attributes.states);
+        if (say == undefined) {
+            const request = handlerInput.requestEnvelope.request;
+            say = askComputation(handlerInput);
+        }
+        console.log("SAY: "+say);
+        return responseBuilder
+            .speak(say)
+            .reprompt('try again, ' + say)
+            .getResponse();
+    },
+};
+
+function checkState(current, previous) {
+    console.log("CheckState");
+    switch (current) {
+        case states.LEVEL:  {
+            if(previous == states.START) return;
+        }
+    }
+   
+    // Anorml Workflow
+    if (current == previous) {
+        return "Tu as déjà répondu à la question."
+    }
+    return "Un probleme s'est produit dans la comprehension du niveau.";
+}
 
 function getRandom(min, max) {
     return Math.floor((Math.random() * ((max - min) + 1)) + min);
@@ -266,11 +308,12 @@ function askComputation(handlerInput) {
     const droite = getRandom(1, 10);
     //SET QUESTION DATA TO ATTRIBUTES
     attributes.result = gauche + droite;
+    if (typeof attributes.counter === 'undefined')  attributes.counter = 0;
 
     attributes.counter += 1;
     attributes.gauche += gauche;
     attributes.droite += droite;
-
+    attributes.states = states.ASKCOMPUTATION
     //SAVE ATTRIBUTES
     handlerInput.attributesManager.setSessionAttributes(attributes);
 
@@ -278,9 +321,24 @@ function askComputation(handlerInput) {
     //  const question ='ca marche';
     return question;
 }
+function askLevel(handlerInput) {
+    console.log("I am in askLevel()");
+    //Generating random computation
+
+    //GET SESSION ATTRIBUTES
+    const attributes = handlerInput.attributesManager.getSessionAttributes();
+
+
+
+    //SAVE ATTRIBUTES
+    handlerInput.attributesManager.setSessionAttributes(attributes);
+    const question = 'choisi ton niveau de 1 à 3 ?';
+
+    return question;
+}
 function getQuestion(counter, gauche, droite) {
     //  let say = 'calcul moi '+randomElement(['l\'addition','la somme'])+' de '++' plus '+;
-    return randomElement(['attention voci la ']) + ` questions ${counter}. ` + randomElement(['calcul', 'donne moi']) + ' ' + randomElement(['l\'addition', 'la somme']) + ' de ' + gauche + ' plus ' + droite;
+    return randomElement(['attention voci la ']) + ` questions ${counter}. ` + randomElement(['calcul', 'donne moi']) + ' ' + randomElement(['l\'addition', 'la somme']) + ' de ' + gauche + ' plus ' + droite+ " ?";
 }
 
 const LaunchRequest_Handler = {
@@ -291,10 +349,22 @@ const LaunchRequest_Handler = {
     handle(handlerInput) {
         const responseBuilder = handlerInput.responseBuilder;
 
-        let say = randomElement(['bonjour', 'bienvenue', 'heureux de te voir' ]) + ' dans  ' + invocationName + ' tu peut dire aide moi pour en savoir plus.';
+        let startLanguageModel = getLanguageModel(states.START);
 
+        let say = randomElement(startLanguageModel.messages.welcome) + ' dans ' +
+            invocationName + ". " + randomElement(startLanguageModel.messages.ask);
+        console.log("say : " + say);
         let skillTitle = capitalize(invocationName);
-
+        //GET SESSION ATTRIBUTES
+        console.log("before1");
+        const attributes = handlerInput.attributesManager.getSessionAttributes();
+        console.log("before2");
+        if (attributes.states != null) console.log("already say");
+        else console.log("State : " + attributes.states);
+        console.log("before3");
+        attributes.states = states.START
+        console.log("before3");  //SAVE ATTRIBUTES
+        handlerInput.attributesManager.setSessionAttributes(attributes);
         if (supportsDisplay(handlerInput)) {
             const myImage1 = new Alexa.ImageHelper()
                 .addImageInstance(DisplayImg1.url)
@@ -360,15 +430,14 @@ const ErrorHandler = {
 
 // 2. Constants ===========================================================================
 
-// Here you can define static data, to be used elsewhere in your code.  For example:
-//    const myString = "Hello World";
-//    const myArray  = [ "orange", "grape", "strawberry" ];
-//    const myObject = { "city": "Boston",  "state":"Massachusetts" };
 const states = {
     START: `_START`,
-    QUIZ: `_QUIZ`,
+    ASKCOMPUTATION: `_ASKCOMPUTATION`,
+    WAITFORRESPONSE: `_WAITFORRESPONSE`,
+    LEVEL: `_LEVEL`,
+    CLOSESESSION: '_CLOSESESSION'
 };
-const helpLast='Votre dernière demande étais.';
+const helpLast = 'Votre dernière demande étais.';
 const helpSample = 'Voici un exemple de ce que vous pouvez me demander';
 const helpMsg = 'Vous avez demandé de l\'aide.';
 const APP_ID = undefined;  // TODO replace with your Skill ID (OPTIONAL).
@@ -431,6 +500,11 @@ function getSlotValues(filledSlots) {
     }, this);
 
     return slotValues;
+}
+function getLanguageModel(currentStep) {
+    console.log("Lang : " + languageModel);
+    let obj = languageModel.find(o => o.state === currentStep);
+    return obj;
 }
 
 function getExampleSlotValues(intentName, slotName) {
@@ -738,6 +812,17 @@ const ResponsePersistenceInterceptor = {
     }
 };
 
+const RequestLog = {
+
+    process(handlerInput) {
+
+        console.log("REQUEST ENVELOPE = " + JSON.stringify(handlerInput.requestEnvelope));
+
+        return;
+
+    }
+
+};
 
 function shuffleArray(array) {  // Fisher Yates shuffle!
 
@@ -768,12 +853,14 @@ exports.handler = skillBuilder
         AMAZON_PauseIntent_Handler,
         AMAZON_StartOverIntent_Handler,
         Resultat_Handler,
-        Addition_Handler,
+        Operations_Handler,
+        Level_Handler,
         LaunchRequest_Handler,
         SessionEndedHandler
     )
     .addErrorHandlers(ErrorHandler)
     .addRequestInterceptors(InitMemoryAttributesInterceptor)
+    .addRequestInterceptors(RequestLog)
     .addRequestInterceptors(RequestHistoryInterceptor)
 
     // .addResponseInterceptors(ResponseRecordSpeechOutputInterceptor)
@@ -790,6 +877,22 @@ exports.handler = skillBuilder
 // End of Skill code -------------------------------------------------------------
 // Static Language Model for reference
 
+const languageModel =
+    [{
+        "state": states.START,
+        "error": ["bouuuuu", "biii"],
+        "messages": {
+            "welcome": ['bonjour', 'salut', 'heureux de te voir'],
+            "ask": ["Veut tu faire des additions, des multiplications ou des soustractions ?"],
+        }
+    },
+    {
+        "state": states.CLOSESESSION,
+        "messages": {
+            "end": ["A trés bientôt","reviens vite me voir","tchao"]
+        }
+    }]
+    ;
 
 const model = {
     "interactionModel": {
@@ -799,12 +902,15 @@ const model = {
                 {
                     "name": "AMAZON.CancelIntent",
                     "samples": [
+                        "ferme calcul mental",
+                        "sort de l'application",
                         "sortir du calcul mental"
                     ]
                 },
                 {
                     "name": "AMAZON.HelpIntent",
                     "samples": [
+                        "je ne comprend pas",
                         "aide moi"
                     ]
                 },
@@ -845,17 +951,60 @@ const model = {
                     ]
                 },
                 {
-                    "name": "Addition",
-                    "slots": [],
+                    "name": "Operations",
+                    "slots": [
+                        {
+                            "name": "OPERATION",
+                            "type": "OPERATION"
+                        }
+                    ],
                     "samples": [
-                        "addition"
+                        "aux tables {OPERATION}",
+                        "tables {OPERATION}",
+                        "aux {OPERATION}",
+                        "des {OPERATION}",
+                        "{OPERATION}"
                     ]
                 },
                 {
-                    "name": "LaunchRequest"
+                    "name": "Level",
+                    "slots": [
+                        {
+                            "name": "NUMBER",
+                            "type": "AMAZON.NUMBER"
+                        }
+                    ],
+                    "samples": [
+                        "{NUMBER}",
+                        "niveau {NUMBER}"
+                    ]
                 }
             ],
-            "types": []
+            "types": [
+                {
+                    "name": "OPERATION",
+                    "values": [
+                        {
+                            "name": {
+                                "value": "soustration"
+                            }
+                        },
+                        {
+                            "name": {
+                                "value": "multiplication"
+                            }
+                        },
+                        {
+                            "name": {
+                                "value": "addition",
+                                "synonyms": [
+                                    "d'addition"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
         }
     }
 };
